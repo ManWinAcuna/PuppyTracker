@@ -11,12 +11,13 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-  projectId: "PASTE_YOUR_PROJECT_ID",
-  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID"
+  apiKey: "AIzaSyCsAQA1KkCzPTbhHh6XUZC7_q00QloReM0",
+  authDomain: "puppy-tracker-f3dc0.firebaseapp.com",
+  projectId: "puppy-tracker-f3dc0",
+  storageBucket: "puppy-tracker-f3dc0.firebasestorage.app",
+  messagingSenderId: "1047106037110",
+  appId: "1:1047106037110:web:557f089996a1bb21d54657",
+  measurementId: "G-TKW0FW6XR1"
 };
 
 // Optional: set a simple family passcode (e.g. "1234") to put a
