@@ -1004,4 +1004,17 @@ function shrinkImage(source, maxSize, quality) {
 setInterval(tick, 1000);
 setInterval(() => { if (!currentPuppyId) renderHome(lastState); }, 60000);
 
+// ============================================================
+//  Stale-app self-healing: iOS freezes web apps that sit in the
+//  background. If we wake up after 5+ minutes away, reload — that
+//  fetches the newest app version AND reconnects live data, so
+//  nobody ever stares at a frozen copy again.
+// ============================================================
+let hiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) location.reload();
+  hiddenAt = null;
+});
+
 boot();
