@@ -1,0 +1,25 @@
+name: Feeding alerts
+
+# Checks the litter every ~5 minutes and pushes a ntfy notification
+# when pups cross the feeding window or a switch timer runs out.
+# (GitHub may add a few minutes of delay at busy times.)
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install web-push
+        run: npm install --no-save web-push@3
+      - name: Check litter and notify
+        run: node scripts/notify.mjs
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}

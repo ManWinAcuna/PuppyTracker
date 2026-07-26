@@ -93,6 +93,7 @@ function demoStore(onChange) {
     deletePhoto(id, pid) { const p = find(id); if (p) p.photos = p.photos.filter(ph => ph.id !== pid); commit(); },
     addFamilyPhoto(d) { data.familyPhotos.push({ id: uid(), ...d }); commit(); },
     deleteFamilyPhoto(id) { data.familyPhotos = data.familyPhotos.filter(ph => ph.id !== id); commit(); },
+    addPushSub() { /* demo mode has no push server — no-op */ },
   };
 }
 
@@ -195,5 +196,12 @@ async function firebaseStore(onChange) {
     deletePhoto(id, pid) { return deleteDoc(doc(db, 'puppies', id, 'photos', pid)); },
     addFamilyPhoto(d) { return addDoc(collection(db, 'familyPhotos'), { ...d, createdAt: serverTimestamp() }); },
     deleteFamilyPhoto(id) { return deleteDoc(doc(db, 'familyPhotos', id)); },
+    addPushSub(d) {
+      // doc id derived from the endpoint so re-subscribing the same phone
+      // overwrites instead of duplicating
+      const id = btoa(JSON.parse(d.sub).endpoint)
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(-180);
+      return setDoc(doc(db, 'pushSubs', id), { ...d, createdAt: serverTimestamp() });
+    },
   };
 }

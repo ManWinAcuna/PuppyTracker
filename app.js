@@ -148,6 +148,9 @@ function showLock() {
 async function startApp() {
   $('#app').classList.remove('hidden');
 
+  // service worker enables system notifications (and PWA niceties)
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
   if (STORE_MODE === 'demo') {
     const b = $('#mode-banner');
     b.className = 'banner demo';
@@ -288,10 +291,20 @@ function statusRing(kind, target, totalMs, pid) {
     </div>`;
 }
 
-// Updates every ring on screen once a second.
+// Updates every ring on screen once a second. The first tick with rings
+// present "primes" the alert sets so pups that were ALREADY overdue when
+// you opened the app don't blast you with alerts — only new crossings do.
+let alertsPrimed = false;
 function tick() {
   const now = Date.now();
-  document.querySelectorAll('.ring[data-cd]').forEach(el => {
+  const rings = document.querySelectorAll('.ring[data-cd]');
+  if (!alertsPrimed && rings.length) {
+    rings.forEach(el => {
+      if (+el.dataset.cd <= now) firedAlerts.add(`${el.dataset.pid}:${el.dataset.cd}`);
+    });
+    alertsPrimed = true;
+  }
+  rings.forEach(el => {
     const target = +el.dataset.cd, total = +el.dataset.total, kind = el.dataset.kind;
     const remain = target - now;
     const over = remain <= 0;
@@ -301,7 +314,7 @@ function tick() {
     el.querySelector('[data-lab]').textContent =
       kind === 'switch' ? (over ? 'switch now!' : 'to switch') : (over ? 'overdue' : 'next feed');
     el.classList.toggle('over', over);
-    if (over && kind === 'switch') fireSwitchAlert(el.dataset.pid, target);
+    if (over) fireAlert(kind, el.dataset.pid, target);
   });
 }
 
@@ -558,7 +571,7 @@ function openStartFeeding(p) {
   });
 }
 
-// ---- switch-time alert: beep + vibrate, once per timer ----
+// ---- alerts: beep + vibrate + system notification, once per event ----
 let audioCtx = null;
 function ensureAudio() {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume?.(); } catch { /* no audio, no problem */ }
@@ -577,12 +590,46 @@ function beep() {
   } catch { /* ignore */ }
 }
 const firedAlerts = new Set();
-function fireSwitchAlert(pid, target) {
+function fireAlert(kind, pid, target) {
   const key = `${pid}:${target}`;
   if (firedAlerts.has(key)) return;
   firedAlerts.add(key);
   beep();
   navigator.vibrate?.([300, 120, 300]);
+  const name = lastState.puppies.find(p => p.id === pid)?.name || 'A pup';
+  notifyLocal(
+    kind === 'switch' ? '🔄 Time to switch!' : '🍽 Puppy needs to eat',
+    kind === 'switch' ? `${name}'s switch timer is up.` : `${name} is past the feeding window.`
+  );
+}
+function notifyLocal(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  navigator.serviceWorker?.ready
+    .then(r => r.showNotification(title, { body, icon: 'icon.svg', badge: 'icon.svg' }))
+    .catch(() => { try { new Notification(title, { body }); } catch { /* no support */ } });
+}
+
+// ---- background push: subscribe this device (works with the app closed) ----
+const VAPID_PUBLIC = 'BOWcF0_ymKEklx4ojdn-TenYVihTCbKbe_QoPcTuNHwSKdhEer1GTiCqwv9Eafa2tdOYm1rD1vxxSZr6VgHULTc';
+function urlB64ToUint8(s) {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const b = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...b].map(c => c.charCodeAt(0)));
+}
+async function enablePhoneAlerts() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    return alert('On iPhone: first add this app to your Home Screen (Share → Add to Home Screen), then open it from there and tap this button again.');
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return alert('Notifications are blocked for this app — allow them in your phone Settings and try again.');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
+    await store.addPushSub({ sub: JSON.stringify(sub), ua: (navigator.userAgent || '').slice(0, 80) });
+    alert('Done! This phone now gets feeding alerts — even with the app closed. 🐶');
+  } catch {
+    alert('Alerts will show while the app is open, but background push could not be set up on this device.');
+  }
 }
 
 // ---------- detail ----------
@@ -905,11 +952,13 @@ function openSettings() {
         ${['lb', 'kg', 'oz', 'g'].map(u => `<option value="${u}" ${s.weightUnit === u ? 'selected' : ''}>${u}</option>`).join('')}
       </select>
     </div>
-    <button class="btn block" id="m-remind" style="margin:6px 0 14px">🔔 Set feeding reminders on my iPhone</button>
+    <button class="btn block" id="m-notif" style="margin:6px 0 10px">🔔 Get feeding alerts on this phone</button>
+    <button class="btn block ghost" id="m-remind" style="margin:0 0 14px">⏰ Set repeating calendar reminders</button>
     <div class="actions">
       <button class="btn ghost" id="m-cancel">Close</button>
       <button class="btn" id="m-save">Save</button>
     </div>`);
+  root.querySelector('#m-notif').addEventListener('click', enablePhoneAlerts);
   root.querySelector('#m-remind').addEventListener('click', () => { close(); openReminder(); });
   root.querySelector('#m-cancel').addEventListener('click', close);
   root.querySelector('#m-save').addEventListener('click', async () => {
