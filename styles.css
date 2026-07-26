@@ -144,6 +144,11 @@ h1, h2, h3 { margin: 0; }
 .card-btn.done { background: linear-gradient(180deg, #46e08d, var(--green)); color: #06210f; }
 .card-btn.stop { flex: 0 0 56px; font-size: 17px; }
 
+/* first tap arms; the pulsing button asks for a confirming second tap */
+.card-btn.armed { animation: pulse 0.8s ease-in-out infinite; font-size: 14px; }
+.card-btn.armed[data-act="cancel"] { background: var(--red); color: #fff; flex: 1.4; border: none; }
+.card-btn.armed[data-act="done"] { box-shadow: 0 0 0 2px #46e08d; }
+
 /* ===== Countdown rings — fill up as time passes ===== */
 .ring { position: relative; width: 74px; height: 74px; flex: none; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
@@ -243,6 +248,34 @@ h1, h2, h3 { margin: 0; }
 }
 .avatar-btns { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .file-btn { display: grid; place-items: center; text-align: center; cursor: pointer; }
+
+/* ===== Family album — horizontal photo strip at the top ===== */
+.pill-btn {
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid rgba(255, 140, 43, 0.25); border-radius: 999px;
+  padding: 7px 14px; font-weight: 800; font-size: 12px; min-height: 34px;
+}
+.family-strip {
+  display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px;
+  margin-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.family-strip::-webkit-scrollbar { display: none; }
+.fam-thumb {
+  width: 96px; height: 96px; object-fit: cover; border-radius: 14px;
+  flex: none; cursor: pointer; border: 1px solid var(--line);
+}
+
+/* ===== Lightbox — expanded photo with save/share ===== */
+.lightbox {
+  position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.93);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 20px; animation: fade 0.15s ease;
+}
+.lightbox img {
+  max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 14px;
+}
+.lb-actions { display: flex; gap: 10px; }
+.lb-hint { font-size: 11px; color: var(--muted); }
 
 /* ===== Litter overview table (sits at the top of the home view) ===== */
 #litter-head { margin-top: 2px; }

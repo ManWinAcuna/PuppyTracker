@@ -48,7 +48,8 @@ function demoStore(onChange) {
   const load = () => {
     try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch { return null; }
   };
-  let data = load() || { settings: { ...DEFAULT_SETTINGS }, puppies: [] };
+  let data = load() || { settings: { ...DEFAULT_SETTINGS }, puppies: [], familyPhotos: [] };
+  data.familyPhotos ||= [];
 
   const save = () => localStorage.setItem(KEY, JSON.stringify(data));
 
@@ -59,7 +60,10 @@ function demoStore(onChange) {
       feedings: [...(p.feedings || [])].sort(byFeedDesc),
       photos: [...(p.photos || [])].sort(byPhotoDesc),
     }));
-    onChange({ mode: 'demo', settings: { ...data.settings }, puppies });
+    onChange({
+      mode: 'demo', settings: { ...data.settings }, puppies,
+      familyPhotos: [...data.familyPhotos].sort(byPhotoDesc),
+    });
   };
 
   const find = id => data.puppies.find(p => p.id === id);
@@ -87,6 +91,8 @@ function demoStore(onChange) {
     deleteFeeding(id, fid) { const p = find(id); if (p) p.feedings = p.feedings.filter(f => f.id !== fid); commit(); },
     addPhoto(id, d) { const p = find(id); if (p) (p.photos ||= []).push({ id: uid(), ...d }); commit(); },
     deletePhoto(id, pid) { const p = find(id); if (p) p.photos = p.photos.filter(ph => ph.id !== pid); commit(); },
+    addFamilyPhoto(d) { data.familyPhotos.push({ id: uid(), ...d }); commit(); },
+    deleteFamilyPhoto(id) { data.familyPhotos = data.familyPhotos.filter(ph => ph.id !== id); commit(); },
   };
 }
 
@@ -106,6 +112,7 @@ async function firebaseStore(onChange) {
 
   // in-memory mirror that we merge live listeners into
   let settings = { ...DEFAULT_SETTINGS };
+  let familyPhotos = [];
   const base = new Map();      // puppyId -> {id, name, birthday, emoji}
   const kids = new Map();      // puppyId -> {weights, feedings, photos}
   const childUnsubs = new Map(); // puppyId -> [unsub, ...]
@@ -120,7 +127,7 @@ async function firebaseStore(onChange) {
         photos: [...(k.photos || [])].sort(byPhotoDesc),
       };
     }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    onChange({ mode: 'firebase', settings: { ...settings }, puppies });
+    onChange({ mode: 'firebase', settings: { ...settings }, puppies, familyPhotos: [...familyPhotos] });
   };
 
   const rows = snap => snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -128,6 +135,12 @@ async function firebaseStore(onChange) {
   // settings/app
   onSnapshot(doc(db, 'settings', 'app'), s => {
     settings = { ...DEFAULT_SETTINGS, ...(s.exists() ? s.data() : {}) };
+    emit();
+  });
+
+  // shared family photo album
+  onSnapshot(query(collection(db, 'familyPhotos'), orderBy('createdAt', 'desc')), s => {
+    familyPhotos = rows(s);
     emit();
   });
 
@@ -180,5 +193,7 @@ async function firebaseStore(onChange) {
     deleteFeeding(id, fid) { return deleteDoc(doc(db, 'puppies', id, 'feedings', fid)); },
     addPhoto(id, d) { return addDoc(child(id, 'photos'), { ...d, createdAt: serverTimestamp() }); },
     deletePhoto(id, pid) { return deleteDoc(doc(db, 'puppies', id, 'photos', pid)); },
+    addFamilyPhoto(d) { return addDoc(collection(db, 'familyPhotos'), { ...d, createdAt: serverTimestamp() }); },
+    deleteFamilyPhoto(id) { return deleteDoc(doc(db, 'familyPhotos', id)); },
   };
 }

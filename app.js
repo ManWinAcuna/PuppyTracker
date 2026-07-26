@@ -116,7 +116,7 @@ function growthHtml(gi) {
 
 // ---------- app state ----------
 let store = null;
-let lastState = { mode: STORE_MODE, settings: { feedingWindowMinutes: 120, weightUnit: 'lb', switchMinutes: 15 }, puppies: [] };
+let lastState = { mode: STORE_MODE, settings: { feedingWindowMinutes: 120, weightUnit: 'lb', switchMinutes: 15 }, puppies: [], familyPhotos: [] };
 let currentPuppyId = null;
 let chart = null;
 
@@ -163,6 +163,87 @@ function wireStaticButtons() {
   $('#btn-add-puppy').addEventListener('click', openAddPuppy);
   $('#btn-settings').addEventListener('click', openSettings);
   $('#btn-back').addEventListener('click', () => { currentPuppyId = null; showHome(); });
+  $('#btn-family-photo').addEventListener('click', openAddFamilyPhoto);
+}
+
+// ============================================================
+//  Lightbox — tap any photo to expand; save/share from there
+// ============================================================
+function openLightbox(src, { onDelete } = {}) {
+  const lb = h(`
+    <div class="lightbox">
+      <img src="${src}" alt="">
+      <div class="lb-actions">
+        <button class="btn" id="lb-save">⬇ Save</button>
+        ${onDelete ? '<button class="btn danger" id="lb-del">🗑 Delete</button>' : ''}
+        <button class="btn ghost" id="lb-close">✕ Close</button>
+      </div>
+      <div class="lb-hint">Tip: you can also press-and-hold the photo to save it</div>
+    </div>`);
+  const close = () => lb.remove();
+  lb.addEventListener('click', e => { if (e.target === lb) close(); });
+  lb.querySelector('#lb-close').addEventListener('click', close);
+  lb.querySelector('#lb-save').addEventListener('click', async () => {
+    try {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], `puppy-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+      // On phones this opens the share sheet → "Save Image" puts it in the camera roll
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { /* user closed the share sheet — fine */ }
+  });
+  lb.querySelector('#lb-del')?.addEventListener('click', async () => { await onDelete(); close(); });
+  $('#modal-root').appendChild(lb);
+}
+
+// ============================================================
+//  Family album — shared photos of the whole crew
+// ============================================================
+function renderFamily(state) {
+  const strip = $('#family-strip');
+  const photos = state.familyPhotos || [];
+  strip.classList.toggle('hidden', !photos.length);
+  strip.innerHTML = '';
+  for (const ph of photos) {
+    const img = h(`<img class="fam-thumb" src="${ph.dataUrl}" alt="" loading="lazy">`);
+    img.addEventListener('click', () =>
+      openLightbox(ph.dataUrl, { onDelete: () => store.deleteFamilyPhoto(ph.id) }));
+    strip.appendChild(img);
+  }
+}
+
+function openAddFamilyPhoto() {
+  const { root, close } = modal(`
+    <h3>Add a family photo 📸</h3>
+    <div class="field"><label>Take or choose a photo</label>
+      <input id="m-file" type="file" accept="image/*" capture="environment" /></div>
+    <div id="m-preview"></div>
+    <div class="actions">
+      <button class="btn ghost" id="m-cancel">Cancel</button>
+      <button class="btn" id="m-save">Save to album</button>
+    </div>`);
+  let dataUrl = null;
+  const preview = root.querySelector('#m-preview');
+  root.querySelector('#m-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    preview.innerHTML = '<div class="hint">Processing…</div>';
+    dataUrl = await shrinkImage(file, 1200, 0.72);
+    preview.innerHTML = `<img src="${dataUrl}" style="width:100%;border-radius:12px;margin:6px 0">`;
+  });
+  root.querySelector('#m-cancel').addEventListener('click', close);
+  root.querySelector('#m-save').addEventListener('click', async () => {
+    if (!dataUrl) return alert('Pick a photo first');
+    await store.addFamilyPhoto({ dataUrl, dateISO: todayISO() });
+    close();
+  });
 }
 
 // ============================================================
@@ -229,6 +310,7 @@ function renderHome(state) {
   wrap.innerHTML = '';
   if (!state.puppies.length) {
     wrap.appendChild(h(`<div class="empty">No puppies yet. Tap “Add a puppy” to start! 🐶</div>`));
+    renderFamily(state);
     renderLitter(state);
     return;
   }
@@ -244,6 +326,7 @@ function renderHome(state) {
     return due(a) - due(b);
   });
   for (const p of sorted) wrap.appendChild(p.feeding ? feedingCard(p, state) : idleCard(p, state));
+  renderFamily(state);
   renderLitter(state);
   tick(); // fill in ring values right away (no blank flash)
 }
@@ -417,6 +500,22 @@ function wireCard(card, p) {
     if (!btn) return openDetail(p.id);
     e.stopPropagation();
     const act = btn.dataset.act;
+    // Done and ✕ need a second tap to fire — guards against misclicks
+    // while juggling puppies. First tap arms the button for 3 seconds.
+    if (act === 'done' || act === 'cancel') {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed');
+        btn.dataset.orig = btn.innerHTML;
+        btn.innerHTML = act === 'done' ? 'Tap again ✓' : 'Tap again ✕';
+        btn._disarm = setTimeout(() => {
+          btn.classList.remove('armed');
+          btn.innerHTML = btn.dataset.orig;
+        }, 3000);
+        return;
+      }
+      clearTimeout(btn._disarm);
+    }
+
     if (act === 'start') openStartFeeding(p);
     else if (act === 'quick') await store.addFeeding(p.id, { atMillis: Date.now(), fedBy: '' });
     else if (act === 'done') await finishFeeding(p);
@@ -428,7 +527,7 @@ function wireCard(card, p) {
       const pausedFor = Date.now() - p.feeding.pausedAt;
       await store.updatePuppy(p.id, { feeding: { startedAt: p.feeding.startedAt + pausedFor, minutes: p.feeding.minutes } });
     } else if (act === 'cancel') {
-      if (confirm(`Stop ${p.name}'s feeding timer without logging it?`)) await store.updatePuppy(p.id, { feeding: null });
+      await store.updatePuppy(p.id, { feeding: null });
     }
   });
 }
@@ -549,6 +648,7 @@ function renderDetail(state) {
   if (!p.photos.length) grid.appendChild(h(`<div class="empty" style="grid-column:1/-1">No photos yet</div>`));
   p.photos.forEach(ph => {
     const fig = h(`<figure><img src="${ph.dataUrl}" alt=""><figcaption>${esc(ph.dateISO || '')}</figcaption></figure>`);
+    fig.querySelector('img').addEventListener('click', () => openLightbox(ph.dataUrl));
     const del = h(`<button class="del" title="delete">✕</button>`);
     del.addEventListener('click', () => { if (confirm('Delete this photo?')) store.deletePhoto(p.id, ph.id); });
     const fav = h(`<button class="fav" title="Make profile picture">★</button>`);
