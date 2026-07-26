@@ -952,14 +952,12 @@ function openSettings() {
         ${['lb', 'kg', 'oz', 'g'].map(u => `<option value="${u}" ${s.weightUnit === u ? 'selected' : ''}>${u}</option>`).join('')}
       </select>
     </div>
-    <button class="btn block" id="m-notif" style="margin:6px 0 10px">🔔 Get feeding alerts on this phone</button>
-    <button class="btn block ghost" id="m-remind" style="margin:0 0 14px">⏰ Set repeating calendar reminders</button>
+    <button class="btn block" id="m-notif" style="margin:6px 0 14px">🔔 Get feeding alerts on this phone</button>
     <div class="actions">
       <button class="btn ghost" id="m-cancel">Close</button>
       <button class="btn" id="m-save">Save</button>
     </div>`);
   root.querySelector('#m-notif').addEventListener('click', enablePhoneAlerts);
-  root.querySelector('#m-remind').addEventListener('click', () => { close(); openReminder(); });
   root.querySelector('#m-cancel').addEventListener('click', close);
   root.querySelector('#m-save').addEventListener('click', async () => {
     const hh = parseInt(root.querySelector('#m-window').value) || 0;
@@ -967,28 +965,6 @@ function openSettings() {
     const total = Math.max(1, hh * 60 + mm);
     const sw = Math.max(1, parseInt(root.querySelector('#m-switch').value) || 15);
     await store.setSettings({ feedingWindowMinutes: total, switchMinutes: sw, weightUnit: root.querySelector('#m-unit').value });
-    close();
-  });
-}
-
-function openReminder() {
-  const hours = Math.max(1, Math.round(lastState.settings.feedingWindowMinutes / 60));
-  const now = new Date(); now.setHours(now.getHours() + 1, 0, 0, 0);
-  const defTime = `${pad(now.getHours())}:00`;
-  const { root, close } = modal(`
-    <h3>iPhone feeding reminders 🔔</h3>
-    <p class="hint" style="margin-top:0">This creates a repeating calendar alarm. Tap “Download”, then on your iPhone tap the file and choose <b>Add All</b>. Everyone in the family can do this on their own phone.</p>
-    <div class="field"><label>First reminder at</label><input id="m-time" type="time" value="${defTime}" /></div>
-    <div class="field"><label>Repeat every (hours)</label><input id="m-every" type="number" min="1" step="1" value="${hours}" /></div>
-    <div class="actions">
-      <button class="btn ghost" id="m-cancel">Cancel</button>
-      <button class="btn" id="m-dl">⬇️ Download reminder</button>
-    </div>`);
-  root.querySelector('#m-cancel').addEventListener('click', close);
-  root.querySelector('#m-dl').addEventListener('click', () => {
-    const [hh, mm] = root.querySelector('#m-time').value.split(':').map(Number);
-    const every = Math.max(1, parseInt(root.querySelector('#m-every').value) || hours);
-    downloadICS(hh, mm, every);
     close();
   });
 }
@@ -1019,33 +995,6 @@ function shrinkImage(source, maxSize, quality) {
     reader.onerror = reject;
     reader.readAsDataURL(source);
   });
-}
-
-// ============================================================
-//  ICS reminder generator (native iPhone alarms)
-// ============================================================
-function downloadICS(startHour, startMin, everyHours) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startHour, startMin, 0);
-  if (start < now) start.setDate(start.getDate() + 1); // start tomorrow if that time already passed
-  const fmt = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
-  const uid = `${Date.now()}@puppytracker`;
-  const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Puppy Tracker//EN', 'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    `UID:${uid}`, `DTSTAMP:${stamp}`, `DTSTART:${fmt(start)}`, 'DURATION:PT5M',
-    `RRULE:FREQ=HOURLY;INTERVAL=${everyHours}`,
-    'SUMMARY:🐶 Feed the puppies', 'DESCRIPTION:Time to feed and check on the puppies.',
-    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Feed the puppies', 'TRIGGER:-PT0M', 'END:VALARM',
-    'END:VEVENT', 'END:VCALENDAR',
-  ];
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'puppy-feeding-reminders.ics';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 // ============================================================
