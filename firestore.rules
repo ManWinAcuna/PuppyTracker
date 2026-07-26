@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// ============================================================
+//  Firestore security rules for Puppy Tracker
+// ------------------------------------------------------------
+//  This app has no login, so these rules allow anyone who knows
+//  your app to read and write. That's fine for a private family
+//  tool whose URL you only share with family. Because there's no
+//  password on the database itself, DON'T store anything
+//  sensitive here, and consider setting APP_PASSCODE in
+//  firebase-config.js as a light lock screen.
+//
+//  Paste these in Firebase Console → Firestore Database → Rules,
+//  then click Publish.
+// ============================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
