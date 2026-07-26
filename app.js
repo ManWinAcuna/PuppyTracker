@@ -238,7 +238,7 @@ function renderHome(state) {
     const due = p => p.feedings[0] ? p.feedings[0].atMillis + windowMs : -Infinity;
     return due(a) - due(b);
   });
-  for (const p of sorted) wrap.appendChild(p.feeding ? feedingCard(p) : idleCard(p, state));
+  for (const p of sorted) wrap.appendChild(p.feeding ? feedingCard(p, state) : idleCard(p, state));
   renderLitter(state);
   tick(); // fill in ring values right away (no blank flash)
 }
@@ -324,6 +324,13 @@ function avatarHtml(p) {
   return src ? `<img class="avatar" src="${src}" alt="">` : `<div class="avatar">${esc(p.emoji || '🐶')}</div>`;
 }
 
+// latest weight shown as a chip next to the name
+function weightChip(p, state) {
+  const lw = p.weights[p.weights.length - 1];
+  if (!lw) return '';
+  return `<span class="wchip">${lw.weight} ${UNIT_LABEL[state.settings.weightUnit] || ''}</span>`;
+}
+
 function idleCard(p, state) {
   const last = p.feedings[0];
   const totalMs = state.settings.feedingWindowMinutes * MIN;
@@ -333,7 +340,7 @@ function idleCard(p, state) {
       <div class="card-main">
         ${avatarHtml(p)}
         <div class="info">
-          <div class="name">${esc(p.name)}${genderGlyph(p)}</div>
+          <div class="name">${esc(p.name)}${genderGlyph(p)}${weightChip(p, state)}</div>
           <div class="sub">${last ? 'Fed ' + timeAgo(last.atMillis) : 'No feeding logged yet'}</div>
         </div>
         ${statusRing('next', target, totalMs, p.id)}
@@ -347,23 +354,50 @@ function idleCard(p, state) {
   return card;
 }
 
-function feedingCard(p) {
-  const totalMs = p.feeding.minutes * MIN;
-  const target = p.feeding.startedAt + totalMs;
+function feedingCard(p, state) {
+  const f = p.feeding;
+  const totalMs = f.minutes * MIN;
+  const target = f.startedAt + totalMs;
+  const paused = !!f.pausedAt;
+
+  let ringHtml, sub, actions;
+  if (paused) {
+    // frozen ring — no data-cd, so the ticker leaves it alone
+    const remain = Math.max(0, target - f.pausedAt);
+    const frac = Math.min(1, Math.max(0, 1 - remain / totalMs));
+    ringHtml = `
+      <div class="ring switch paused">
+        <svg viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="ring-track" cx="36" cy="36" r="31"/>
+          <circle class="ring-fill" cx="36" cy="36" r="31" stroke-dasharray="${RING_C}" stroke-dashoffset="${(RING_C * (1 - frac)).toFixed(1)}"/>
+        </svg>
+        <div class="ring-text"><span class="cd-num">${fmtRing(remain)}</span><span class="cd-lab">paused</span></div>
+      </div>`;
+    sub = `⏸ Paused · ${fmtRing(remain)} left on the timer`;
+    actions = `
+      <button class="card-btn primary" data-act="resume">▶ Resume</button>
+      <button class="card-btn done" data-act="done">✓ Done</button>
+      <button class="card-btn ghosty stop" data-act="cancel">✕</button>`;
+  } else {
+    ringHtml = statusRing('switch', target, totalMs, p.id);
+    sub = `🍼 Feeding · started ${timeAgo(f.startedAt)} · ${f.minutes} min`;
+    actions = `
+      <button class="card-btn done" data-act="done">✓ Done — log feeding</button>
+      <button class="card-btn ghosty stop" data-act="pause" title="Pause the timer">⏸</button>
+      <button class="card-btn ghosty stop" data-act="cancel">✕</button>`;
+  }
+
   const card = h(`
-    <div class="card feeding" data-id="${p.id}">
+    <div class="card feeding ${paused ? 'paused' : ''}" data-id="${p.id}">
       <div class="card-main">
         ${avatarHtml(p)}
         <div class="info">
-          <div class="name">${esc(p.name)}${genderGlyph(p)}</div>
-          <div class="sub">🍼 Feeding · started ${timeAgo(p.feeding.startedAt)} · ${p.feeding.minutes} min</div>
+          <div class="name">${esc(p.name)}${genderGlyph(p)}${weightChip(p, state)}</div>
+          <div class="sub">${sub}</div>
         </div>
-        ${statusRing('switch', target, totalMs, p.id)}
+        ${ringHtml}
       </div>
-      <div class="card-actions">
-        <button class="card-btn done" data-act="done">✓ Done — log feeding</button>
-        <button class="card-btn ghosty stop" data-act="cancel">✕</button>
-      </div>
+      <div class="card-actions">${actions}</div>
     </div>`);
   wireCard(card, p);
   return card;
@@ -378,7 +412,14 @@ function wireCard(card, p) {
     if (act === 'start') openStartFeeding(p);
     else if (act === 'quick') await store.addFeeding(p.id, { atMillis: Date.now(), fedBy: '' });
     else if (act === 'done') await finishFeeding(p);
-    else if (act === 'cancel') {
+    else if (act === 'pause') {
+      await store.updatePuppy(p.id, { feeding: { ...p.feeding, pausedAt: Date.now() } });
+    } else if (act === 'resume') {
+      // shift the start forward by however long we were paused, so the
+      // timer picks up exactly where it left off
+      const pausedFor = Date.now() - p.feeding.pausedAt;
+      await store.updatePuppy(p.id, { feeding: { startedAt: p.feeding.startedAt + pausedFor, minutes: p.feeding.minutes } });
+    } else if (act === 'cancel') {
       if (confirm(`Stop ${p.name}'s feeding timer without logging it?`)) await store.updatePuppy(p.id, { feeding: null });
     }
   });
