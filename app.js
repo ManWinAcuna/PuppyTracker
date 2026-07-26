@@ -227,7 +227,18 @@ function renderHome(state) {
     renderLitter(state);
     return;
   }
-  for (const p of state.puppies) wrap.appendChild(p.feeding ? feedingCard(p) : idleCard(p, state));
+  // Priority order: pups mid-feeding stay pinned on top (soonest switch
+  // first), then everyone else by who's due to eat next — never-fed pups
+  // count as due immediately.
+  const windowMs = state.settings.feedingWindowMinutes * MIN;
+  const sorted = [...state.puppies].sort((a, b) => {
+    const fa = !!a.feeding, fb = !!b.feeding;
+    if (fa !== fb) return fa ? -1 : 1;
+    if (fa && fb) return (a.feeding.startedAt + a.feeding.minutes * MIN) - (b.feeding.startedAt + b.feeding.minutes * MIN);
+    const due = p => p.feedings[0] ? p.feedings[0].atMillis + windowMs : -Infinity;
+    return due(a) - due(b);
+  });
+  for (const p of sorted) wrap.appendChild(p.feeding ? feedingCard(p) : idleCard(p, state));
   renderLitter(state);
   tick(); // fill in ring values right away (no blank flash)
 }
