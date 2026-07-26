@@ -46,15 +46,20 @@ const dateAt = iso => new Date(iso + 'T00:00:00'); // parse plain dates consiste
 function growthInfo(p, settings) {
   const unit = UNIT_LABEL[settings.weightUnit] || '';
   const first = p.weights[0];
-  const baseW = p.birthWeight || (first && first.weight) || null;
-  const baseDate = p.birthday || (first && first.dateISO) || null;
+  // Baseline: birth weight anchored at the birthday when BOTH are known;
+  // otherwise the first weigh-in anchored at its own date. Never mix a
+  // later weight with the birth date — that would inflate expectations
+  // for pups that weren't weighed at birth.
+  let baseW = null, baseDate = null, usingFirstWeighIn = false;
+  if (p.birthWeight && p.birthday) { baseW = p.birthWeight; baseDate = p.birthday; }
+  else if (first) { baseW = first.weight; baseDate = first.dateISO; usingFirstWeighIn = true; }
   if (!baseW || !baseDate) return null;
-  const usingFirstWeighIn = !p.birthWeight;
 
-  const ageDays = Math.max(0, Math.floor((Date.now() - dateAt(baseDate).getTime()) / DAY));
+  const ageDays = Math.max(0, Math.floor((Date.now() - dateAt(p.birthday || baseDate).getTime()) / DAY)); // true age, for display
+  const sinceBase = Math.max(0, Math.floor((Date.now() - dateAt(baseDate).getTime()) / DAY));             // days since baseline, for math
   const lowRate = baseW * 0.05, highRate = baseW * 0.10;   // per day
-  const expLow = baseW + lowRate * ageDays;                 // expected weight today
-  const expHigh = baseW + highRate * ageDays;
+  const expLow = baseW + lowRate * sinceBase;               // expected weight today
+  const expHigh = baseW + highRate * sinceBase;
 
   const last = p.weights[p.weights.length - 1];
   const prev = p.weights[p.weights.length - 2];
@@ -260,8 +265,7 @@ function renderLitter(state) {
 
   const rows = pups.map(p => {
     const gi = growthInfo(p, state.settings);
-    const last = p.weights[p.weights.length - 1];
-    return { p, gi, w: last ? last.weight : null };
+    return { p, gi, w: currentWeight(p) };
   });
   rows.sort((a, b) => (a.w ?? Infinity) - (b.w ?? Infinity)); // smallest first, unweighed last
   const weighed = rows.filter(r => r.w != null);
@@ -324,11 +328,15 @@ function avatarHtml(p) {
   return src ? `<img class="avatar" src="${src}" alt="">` : `<div class="avatar">${esc(p.emoji || '🐶')}</div>`;
 }
 
-// latest weight shown as a chip next to the name
+// current weight = latest weigh-in, falling back to the starting/birth weight
+const currentWeight = p =>
+  p.weights.length ? p.weights[p.weights.length - 1].weight : (p.birthWeight ?? null);
+
+// shown as a chip next to the name
 function weightChip(p, state) {
-  const lw = p.weights[p.weights.length - 1];
-  if (!lw) return '';
-  return `<span class="wchip">${lw.weight} ${UNIT_LABEL[state.settings.weightUnit] || ''}</span>`;
+  const w = currentWeight(p);
+  if (w == null) return '';
+  return `<span class="wchip">${w} ${UNIT_LABEL[state.settings.weightUnit] || ''}</span>`;
 }
 
 function idleCard(p, state) {
@@ -499,7 +507,7 @@ function renderDetail(state) {
       ${avatar}
       <div>
         <h2>${esc(p.name)}${genderGlyph(p)}</h2>
-        <div class="sub">${esc([ageText(p.birthday), latest ? `${latest.weight} ${unit}` : 'no weight yet', p.feeding ? '🍼 feeding right now' : ''].filter(Boolean).join(' · '))}</div>
+        <div class="sub">${esc([ageText(p.birthday), currentWeight(p) != null ? `${currentWeight(p)} ${unit}` : 'no weight yet', p.feeding ? '🍼 feeding right now' : ''].filter(Boolean).join(' · '))}</div>
         <button class="link-btn" id="edit-pup">✏️ Edit / remove</button>
       </div>
     </div>`));
@@ -509,7 +517,7 @@ function renderDetail(state) {
   const gi = growthInfo(p, state.settings);
   const wp = h(`
     <div class="panel">
-      <h3><span>Weight</span> <span class="big">${latest ? latest.weight + ' ' + unit : '—'}</span></h3>
+      <h3><span>Weight</span> <span class="big">${currentWeight(p) != null ? currentWeight(p) + ' ' + unit : '—'}</span></h3>
       ${growthHtml(gi)}
       <canvas id="wchart" height="160"></canvas>
       <button class="btn block ghost" id="add-weight" style="margin-top:12px">＋ Log today's weight</button>
