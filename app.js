@@ -269,7 +269,7 @@ function renderLitter(state) {
       const st = gi && gi.status;
       const runt = w != null && w === minW && weighed.length > 1 ? ' <em class="runt">smallest</em>' : '';
       return `<div class="lrow" data-id="${p.id}">
-        <span class="lname">${miniAvatar(p)}<span class="lname-t">${esc(p.name)}</span>${runt}</span>
+        <span class="lname">${miniAvatar(p)}<span class="lname-t">${esc(p.name)}</span>${genderGlyph(p)}${runt}</span>
         <span class="lval">${w != null ? r2(w) + ' ' + unit : '—'}</span>
         <span class="lval">${gain != null ? (gain > 0 ? '+' : '') + r2(gain) : '—'}</span>
         <span class="lstat ${st ? st.cls : ''}">${st ? st.label.split(' ')[0] : '—'}</span>
@@ -284,6 +284,30 @@ function renderLitter(state) {
 }
 
 // Profile picture priority: custom avatar → newest growth photo → emoji
+const genderGlyph = p =>
+  p.gender === 'f' ? '<span class="gender">♀</span>' :
+  p.gender === 'm' ? '<span class="gender">♂</span>' : '';
+
+// segmented Boy/Girl picker used by the Add + Edit sheets; returns a getter
+function wireGenderPicker(root, initial) {
+  let val = initial || '';
+  const paint = () => root.querySelectorAll('[data-g]').forEach(b =>
+    b.style.outline = b.dataset.g === val ? '2px solid var(--accent)' : 'none');
+  root.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => {
+    val = (val === b.dataset.g) ? '' : b.dataset.g; // tap again to unset
+    paint();
+  }));
+  paint();
+  return () => val;
+}
+const genderField = () => `
+  <div class="field"><label>Gender</label>
+    <div class="row">
+      <button type="button" class="btn ghost" data-g="m" style="flex:1">♂ Boy</button>
+      <button type="button" class="btn ghost" data-g="f" style="flex:1">♀ Girl</button>
+    </div>
+  </div>`;
+
 function avatarHtml(p) {
   const src = p.avatar || p.photos[0]?.dataUrl;
   return src ? `<img class="avatar" src="${src}" alt="">` : `<div class="avatar">${esc(p.emoji || '🐶')}</div>`;
@@ -298,7 +322,7 @@ function idleCard(p, state) {
       <div class="card-main">
         ${avatarHtml(p)}
         <div class="info">
-          <div class="name">${esc(p.name)}</div>
+          <div class="name">${esc(p.name)}${genderGlyph(p)}</div>
           <div class="sub">${last ? 'Fed ' + timeAgo(last.atMillis) : 'No feeding logged yet'}</div>
         </div>
         ${statusRing('next', target, totalMs, p.id)}
@@ -320,7 +344,7 @@ function feedingCard(p) {
       <div class="card-main">
         ${avatarHtml(p)}
         <div class="info">
-          <div class="name">${esc(p.name)}</div>
+          <div class="name">${esc(p.name)}${genderGlyph(p)}</div>
           <div class="sub">🍼 Feeding · started ${timeAgo(p.feeding.startedAt)} · ${p.feeding.minutes} min</div>
         </div>
         ${statusRing('switch', target, totalMs, p.id)}
@@ -422,7 +446,7 @@ function renderDetail(state) {
     <div class="detail-head">
       ${avatar}
       <div>
-        <h2>${esc(p.name)}</h2>
+        <h2>${esc(p.name)}${genderGlyph(p)}</h2>
         <div class="sub">${esc([ageText(p.birthday), latest ? `${latest.weight} ${unit}` : 'no weight yet', p.feeding ? '🍼 feeding right now' : ''].filter(Boolean).join(' · '))}</div>
         <button class="link-btn" id="edit-pup">✏️ Edit / remove</button>
       </div>
@@ -556,6 +580,7 @@ function openAddPuppy() {
   const { root, close } = modal(`
     <h3>Add a puppy 🐶</h3>
     <div class="field"><label>Name</label><input id="m-name" placeholder="e.g. Bella" /></div>
+    ${genderField()}
     <div class="field"><label>Birthday (optional)</label><input id="m-bday" type="date" /></div>
     <div class="field"><label>Birth weight (${unit}, optional — powers the expected-gain tracker)</label>
       <input id="m-bw" type="number" step="0.01" inputmode="decimal" placeholder="e.g. 1.5" /></div>
@@ -567,6 +592,7 @@ function openAddPuppy() {
       <button class="btn" id="m-save">Add puppy</button>
     </div>`);
   let emoji = '🐶';
+  const getGender = wireGenderPicker(root, '');
   root.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => {
     emoji = b.dataset.e;
     root.querySelectorAll('[data-e]').forEach(x => x.style.outline = 'none');
@@ -577,7 +603,7 @@ function openAddPuppy() {
     const name = root.querySelector('#m-name').value.trim();
     if (!name) return root.querySelector('#m-name').focus();
     const bw = parseFloat(root.querySelector('#m-bw').value);
-    await store.addPuppy({ name, birthday: root.querySelector('#m-bday').value, emoji, birthWeight: isNaN(bw) ? null : bw });
+    await store.addPuppy({ name, gender: getGender(), birthday: root.querySelector('#m-bday').value, emoji, birthWeight: isNaN(bw) ? null : bw });
     close();
   });
   root.querySelector('#m-name').focus();
@@ -597,6 +623,7 @@ function openEditPuppy(p) {
       </div>
     </div>
     <div class="field"><label>Name</label><input id="m-name" value="${esc(p.name)}" /></div>
+    ${genderField()}
     <div class="field"><label>Birthday</label><input id="m-bday" type="date" value="${esc(p.birthday || '')}" /></div>
     <div class="field"><label>Birth weight (${UNIT_LABEL[lastState.settings.weightUnit] || ''} — powers the expected-gain tracker)</label>
       <input id="m-bw" type="number" step="0.01" inputmode="decimal" value="${p.birthWeight ?? ''}" placeholder="e.g. 1.5" /></div>
@@ -609,6 +636,7 @@ function openEditPuppy(p) {
     </div>
     <button class="btn danger block" id="m-del" style="margin-top:12px">🗑 Remove this puppy</button>`);
   let emoji = p.emoji || '🐶';
+  const getGender = wireGenderPicker(root, p.gender);
   let avatarPatch = {}; // becomes { avatar: dataUrl } or { avatar: null } if changed
   root.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => {
     emoji = b.dataset.e;
@@ -633,7 +661,7 @@ function openEditPuppy(p) {
     const name = root.querySelector('#m-name').value.trim();
     if (!name) return;
     const bw = parseFloat(root.querySelector('#m-bw').value);
-    await store.updatePuppy(p.id, { name, birthday: root.querySelector('#m-bday').value, emoji, birthWeight: isNaN(bw) ? null : bw, ...avatarPatch });
+    await store.updatePuppy(p.id, { name, gender: getGender(), birthday: root.querySelector('#m-bday').value, emoji, birthWeight: isNaN(bw) ? null : bw, ...avatarPatch });
     close();
   });
   root.querySelector('#m-del').addEventListener('click', async () => {
