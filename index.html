@@ -35,7 +35,7 @@
   <!-- HOME: feeding overview -->
   <main id="view-home" class="view">
     <section class="section-head" id="family-head">
-      <h2>Family album</h2>
+      <h2 id="album-open" class="tap-title">Family album <span class="chev">›</span></h2>
       <button id="btn-family-photo" class="pill-btn">📷 Add photo</button>
     </section>
     <div id="family-strip" class="family-strip hidden"></div>
@@ -56,6 +56,17 @@
   <main id="view-detail" class="view hidden">
     <button id="btn-back" class="back">‹ All puppies</button>
     <div id="detail-content"></div>
+  </main>
+
+  <!-- ALBUM: full family photo album -->
+  <main id="view-album" class="view hidden">
+    <button id="btn-album-back" class="back">‹ Home</button>
+    <section class="section-head">
+      <h2>Family album 📸</h2>
+      <span id="album-count" class="pill"></span>
+    </section>
+    <button id="btn-family-photo-album" class="btn block ghost" style="margin-bottom:14px">📷 Add a photo</button>
+    <div id="album-grid" class="photo-grid"></div>
   </main>
 </div>
 

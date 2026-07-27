@@ -118,6 +118,7 @@ function growthHtml(gi) {
 let store = null;
 let lastState = { mode: STORE_MODE, settings: { feedingWindowMinutes: 120, weightUnit: 'lb', switchMinutes: 15 }, puppies: [], familyPhotos: [] };
 let currentPuppyId = null;
+let albumOpen = false;
 let chart = null;
 
 // ============================================================
@@ -167,6 +168,9 @@ function wireStaticButtons() {
   $('#btn-settings').addEventListener('click', openSettings);
   $('#btn-back').addEventListener('click', () => { currentPuppyId = null; showHome(); });
   $('#btn-family-photo').addEventListener('click', openAddFamilyPhoto);
+  $('#btn-family-photo-album').addEventListener('click', openAddFamilyPhoto);
+  $('#album-open').addEventListener('click', openAlbum);
+  $('#btn-album-back').addEventListener('click', () => { albumOpen = false; showHome(); });
 }
 
 // ============================================================
@@ -257,6 +261,7 @@ function render(state) {
   $('#window-label').textContent = 'every ' + windowText(state.settings.feedingWindowMinutes);
   renderHome(state);
   if (currentPuppyId) renderDetail(state);
+  if (albumOpen) renderAlbum(state);
 }
 
 function windowText(mins) {
@@ -633,9 +638,33 @@ async function enablePhoneAlerts() {
 }
 
 // ---------- detail ----------
-function openDetail(id) { currentPuppyId = id; showDetail(); renderDetail(lastState); }
-function showHome() { $('#view-detail').classList.add('hidden'); $('#view-home').classList.remove('hidden'); window.scrollTo(0, 0); }
-function showDetail() { $('#view-home').classList.add('hidden'); $('#view-detail').classList.remove('hidden'); window.scrollTo(0, 0); }
+function openDetail(id) { currentPuppyId = id; albumOpen = false; showDetail(); renderDetail(lastState); }
+function showHome() { $('#view-detail').classList.add('hidden'); $('#view-album').classList.add('hidden'); $('#view-home').classList.remove('hidden'); window.scrollTo(0, 0); }
+function showDetail() { $('#view-home').classList.add('hidden'); $('#view-album').classList.add('hidden'); $('#view-detail').classList.remove('hidden'); window.scrollTo(0, 0); }
+function openAlbum() {
+  albumOpen = true; currentPuppyId = null;
+  $('#view-home').classList.add('hidden'); $('#view-detail').classList.add('hidden');
+  $('#view-album').classList.remove('hidden');
+  window.scrollTo(0, 0);
+  renderAlbum(lastState);
+}
+
+function renderAlbum(state) {
+  const photos = state.familyPhotos || [];
+  $('#album-count').textContent = `${photos.length} photo${photos.length === 1 ? '' : 's'}`;
+  const grid = $('#album-grid');
+  grid.innerHTML = '';
+  if (!photos.length) {
+    grid.appendChild(h(`<div class="empty" style="grid-column:1/-1">No family photos yet — take the first one! 📷</div>`));
+    return;
+  }
+  for (const ph of photos) {
+    const fig = h(`<figure><img src="${ph.dataUrl}" alt="" loading="lazy"><figcaption>${esc(ph.dateISO || '')}</figcaption></figure>`);
+    fig.querySelector('img').addEventListener('click', () =>
+      openLightbox(ph.dataUrl, { onDelete: () => store.deleteFamilyPhoto(ph.id) }));
+    grid.appendChild(fig);
+  }
+}
 
 function renderDetail(state) {
   const p = state.puppies.find(x => x.id === currentPuppyId);

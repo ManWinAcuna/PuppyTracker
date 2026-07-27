@@ -250,6 +250,8 @@ h1, h2, h3 { margin: 0; }
 .file-btn { display: grid; place-items: center; text-align: center; cursor: pointer; }
 
 /* ===== Family album — horizontal photo strip at the top ===== */
+.tap-title { cursor: pointer; }
+.chev { color: var(--accent); font-weight: 800; }
 .pill-btn {
   background: var(--accent-soft); color: var(--accent);
   border: 1px solid rgba(255, 140, 43, 0.25); border-radius: 999px;
