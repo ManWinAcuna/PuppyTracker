@@ -338,19 +338,21 @@ function statusRing(kind, target, totalMs, pid) {
     </div>`;
 }
 
-// Updates every ring on screen once a second. The first tick with rings
-// present "primes" the alert sets so pups that were ALREADY overdue when
-// you opened the app don't blast you with alerts — only new crossings do.
-let alertsPrimed = false;
+// Updates every ring on screen once a second. The FIRST time we see any
+// countdown that is already expired, we mark it silently — only crossings
+// that happen while you're actually watching fire an alert. Tracked
+// per-countdown, so it works no matter what order the pups' data loads in.
+const seenTargets = new Set();
 function tick() {
   const now = Date.now();
   const rings = document.querySelectorAll('.ring[data-cd]');
-  if (!alertsPrimed && rings.length) {
-    rings.forEach(el => {
-      if (+el.dataset.cd <= now) firedAlerts.add(`${el.dataset.pid}:${el.dataset.cd}`);
-    });
-    alertsPrimed = true;
-  }
+  rings.forEach(el => {
+    const key = `${el.dataset.pid}:${el.dataset.cd}`;
+    if (!seenTargets.has(key)) {
+      seenTargets.add(key);
+      if (+el.dataset.cd <= now) firedAlerts.add(key); // pre-existing — stay quiet
+    }
+  });
   rings.forEach(el => {
     const target = +el.dataset.cd, total = +el.dataset.total, kind = el.dataset.kind;
     const remain = target - now;

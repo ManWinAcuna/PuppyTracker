@@ -1,17 +1,29 @@
 name: Feeding alerts
 
-# Checks the litter every ~5 minutes and pushes a ntfy notification
-# when pups cross the feeding window or a switch timer runs out.
-# (GitHub may add a few minutes of delay at busy times.)
+# Continuous litter watcher. GitHub's cron scheduler is unreliable, so
+# instead of trusting it every 5 minutes we run ONE long job that checks
+# every 2 minutes for ~5.7 hours and then relaunches itself. Triggers:
+#  - push to main  → (re)starts the watcher immediately on every deploy
+#  - self-dispatch → the job chains the next one when it finishes
+#  - hourly cron   → backup revival if a chain ever breaks
 on:
+  push:
+    branches: [main]
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch: {}
 
+permissions:
+  actions: write
+
+concurrency:
+  group: feeding-alerts
+  cancel-in-progress: true
+
 jobs:
-  check:
+  watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,7 +31,25 @@ jobs:
           node-version: 20
       - name: Install web-push
         run: npm install --no-save web-push@3
-      - name: Check litter and notify
-        run: node scripts/notify.mjs
+      - name: Watch the litter (checks every 2 minutes)
         env:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -z "$VAPID_PRIVATE_KEY" ]; then
+            echo "::warning::VAPID_PRIVATE_KEY secret is NOT set - notifications CANNOT send! Add it in repo Settings -> Secrets and variables -> Actions."
+          else
+            echo "VAPID key present - notifications armed."
+          fi
+          end=$((SECONDS + 340*60))
+          while [ $SECONDS -lt $end ]; do
+            node scripts/notify.mjs || echo "check failed - retrying in 2 min"
+            sleep 120
+          done
+      - name: Chain the next watcher
+        if: success()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/feeding-alerts.yml/dispatches \
+            -d '{"ref":"main"}'
