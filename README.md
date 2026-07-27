@@ -10,6 +10,7 @@ A simple web app to track your puppies:
 - 🐶🐶🐶 **Litter overview** — one table with every pup's latest weight, gain/day, and health status side by side, sorted smallest-first so the runt is always on top.
 - ☕ **Give mom a break** — one tap pauses every running switch timer and mutes all alerts (for the whole family) while mom's off duty; tap again and everything resumes exactly where it left off.
 - 👨‍👩‍👧 **Shared with family** — everyone sees the same live data (once Firebase is set up).
+- 📺 **Watch-only link** — share `watch.html` with friends and fans: they see the live litter overview and family album, nothing else, and can't change anything. Copy the link from ⚙️ Settings.
 
 It's plain HTML/CSS/JavaScript — **no build step** — so it runs great on free GitHub Pages and is easy to edit.
 

@@ -1030,12 +1030,18 @@ function openSettings() {
         ${['lb', 'kg', 'oz', 'g'].map(u => `<option value="${u}" ${s.weightUnit === u ? 'selected' : ''}>${u}</option>`).join('')}
       </select>
     </div>
-    <button class="btn block" id="m-notif" style="margin:6px 0 14px">🔔 Get feeding alerts on this phone</button>
+    <button class="btn block" id="m-notif" style="margin:6px 0 10px">🔔 Get feeding alerts on this phone</button>
+    <button class="btn block ghost" id="m-watch" style="margin:0 0 14px">📺 Copy watch-only link (for friends & fans)</button>
     <div class="actions">
       <button class="btn ghost" id="m-cancel">Close</button>
       <button class="btn" id="m-save">Save</button>
     </div>`);
   root.querySelector('#m-notif').addEventListener('click', enablePhoneAlerts);
+  root.querySelector('#m-watch').addEventListener('click', async () => {
+    const url = new URL('watch.html', location.href).href;
+    try { await navigator.clipboard.writeText(url); alert('Watch-only link copied!\n\n' + url + '\n\nWhoever opens it sees the litter overview and family album — nothing else, and they can\'t change anything.'); }
+    catch { prompt('Copy this watch-only link:', url); }
+  });
   root.querySelector('#m-cancel').addEventListener('click', close);
   root.querySelector('#m-save').addEventListener('click', async () => {
     const hh = parseInt(root.querySelector('#m-window').value) || 0;
