@@ -37,6 +37,13 @@ const now = Date.now();
 const settings = await getJSON(`${BASE}/settings/app`).catch(() => null);
 const windowMin = (settings && val(settings.fields.feedingWindowMinutes)) || 120;
 
+// ☕ break mode — the family paused everything; stay quiet and don't
+// mark anything, so alerts fire normally once the break ends
+if (settings && val(settings.fields.breakStartedAt)) {
+  console.log("Mom's on a break — alerts muted.");
+  process.exit(0);
+}
+
 const pups = (await getJSON(`${BASE}/puppies?pageSize=300`)).documents || [];
 const dueNames = [], switchNames = [], patches = [];
 

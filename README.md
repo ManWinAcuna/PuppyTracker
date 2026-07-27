@@ -8,6 +8,7 @@ A simple web app to track your puppies:
 - 📷 **Growth photos** — snap a photo over time to see them grow. Tap the ★ on any photo to make it a puppy's profile picture, or set a dedicated one in ✏️ Edit.
 - 🔔 **Real notifications** — your phone gets a push ("🍽 Green, Blue need to eat!") when pups cross the feeding window or a switch timer runs out, **even with the app closed**. A GitHub Action in this repo checks the litter every ~5 minutes and sends Web Push to every phone that enabled alerts. Each person: open the app **from the Home Screen icon** → ⚙️ → **Get feeding alerts on this phone** → Allow. One-time repo setup: add the VAPID private key as an Actions secret named `VAPID_PRIVATE_KEY` (repo Settings → Secrets and variables → Actions). While the app is open, alerts also beep + vibrate instantly. Note: GitHub pauses scheduled workflows after ~60 days without repo activity — any commit revives them.
 - 🐶🐶🐶 **Litter overview** — one table with every pup's latest weight, gain/day, and health status side by side, sorted smallest-first so the runt is always on top.
+- ☕ **Give mom a break** — one tap pauses every running switch timer and mutes all alerts (for the whole family) while mom's off duty; tap again and everything resumes exactly where it left off.
 - 👨‍👩‍👧 **Shared with family** — everyone sees the same live data (once Firebase is set up).
 
 It's plain HTML/CSS/JavaScript — **no build step** — so it runs great on free GitHub Pages and is easy to edit.

@@ -149,6 +149,19 @@ h1, h2, h3 { margin: 0; }
 .card-btn.armed[data-act="cancel"] { background: var(--red); color: #fff; flex: 1.4; border: none; }
 .card-btn.armed[data-act="done"] { box-shadow: 0 0 0 2px #46e08d; }
 
+/* ===== ☕ Give mom a break ===== */
+.break-btn {
+  width: 100%; min-height: 52px; margin: 2px 0 14px; padding: 14px;
+  border: 1px solid rgba(255, 201, 60, 0.35); border-radius: var(--radius);
+  background: var(--yellow-soft); color: var(--yellow);
+  font-weight: 800; font-size: 15px;
+}
+.break-btn.active {
+  background: linear-gradient(180deg, #ffd45e, var(--yellow));
+  color: #241a02; border: none;
+}
+.break-btn.active [data-elapsed] { font-variant-numeric: tabular-nums; }
+
 /* ===== Countdown rings — fill up as time passes ===== */
 .ring { position: relative; width: 74px; height: 74px; flex: none; }
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }

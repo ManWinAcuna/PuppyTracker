@@ -171,6 +171,48 @@ function wireStaticButtons() {
   $('#btn-family-photo-album').addEventListener('click', openAddFamilyPhoto);
   $('#album-open').addEventListener('click', openAlbum);
   $('#btn-album-back').addEventListener('click', () => { albumOpen = false; showHome(); });
+  $('#btn-break').addEventListener('click', toggleBreak);
+}
+
+// ============================================================
+//  ☕ Give mom a break — pauses every running switch timer and
+//  mutes alerts until the break ends. Synced for the whole family.
+// ============================================================
+async function toggleBreak() {
+  const bs = lastState.settings.breakStartedAt;
+  if (!bs) {
+    // pause every RUNNING feeding timer, tagged so ending the break
+    // only resumes the ones the break itself paused
+    for (const p of lastState.puppies) {
+      if (p.feeding && !p.feeding.pausedAt) {
+        await store.updatePuppy(p.id, { feeding: { ...p.feeding, pausedAt: Date.now(), byBreak: true } });
+      }
+    }
+    await store.setSettings({ breakStartedAt: Date.now() });
+  } else {
+    for (const p of lastState.puppies) {
+      if (p.feeding && p.feeding.pausedAt && p.feeding.byBreak) {
+        const pausedFor = Date.now() - p.feeding.pausedAt;
+        await store.updatePuppy(p.id, { feeding: { startedAt: p.feeding.startedAt + pausedFor, minutes: p.feeding.minutes } });
+      }
+    }
+    await store.setSettings({ breakStartedAt: null });
+  }
+}
+
+function renderBreak(state) {
+  const b = $('#btn-break');
+  b.classList.toggle('hidden', !state.puppies.length);
+  const bs = state.settings.breakStartedAt;
+  if (bs) {
+    b.classList.add('active');
+    b.dataset.since = bs;
+    b.innerHTML = `☕ Mom's on a break — <span data-elapsed>${fmtRing(Date.now() - bs)}</span> · tap to end`;
+  } else {
+    b.classList.remove('active');
+    delete b.dataset.since;
+    b.textContent = '☕ Give mom a break';
+  }
 }
 
 // ============================================================
@@ -321,6 +363,10 @@ function tick() {
     el.classList.toggle('over', over);
     if (over) fireAlert(kind, el.dataset.pid, target);
   });
+  // live elapsed time on the break banner
+  const breakBtn = $('#btn-break');
+  const el = breakBtn?.querySelector('[data-elapsed]');
+  if (el && breakBtn.dataset.since) el.textContent = fmtRing(now - +breakBtn.dataset.since);
 }
 
 function renderHome(state) {
@@ -330,6 +376,7 @@ function renderHome(state) {
     wrap.appendChild(h(`<div class="empty">No puppies yet. Tap “Add a puppy” to start! 🐶</div>`));
     renderFamily(state);
     renderLitter(state);
+    renderBreak(state);
     return;
   }
   // Priority order: pups mid-feeding stay pinned on top (soonest switch
@@ -346,6 +393,7 @@ function renderHome(state) {
   for (const p of sorted) wrap.appendChild(p.feeding ? feedingCard(p, state) : idleCard(p, state));
   renderFamily(state);
   renderLitter(state);
+  renderBreak(state);
   tick(); // fill in ring values right away (no blank flash)
 }
 
@@ -596,6 +644,7 @@ function beep() {
 }
 const firedAlerts = new Set();
 function fireAlert(kind, pid, target) {
+  if (lastState.settings.breakStartedAt) return; // mom's on a break — quiet; fires after the break ends
   const key = `${pid}:${target}`;
   if (firedAlerts.has(key)) return;
   firedAlerts.add(key);
