@@ -104,7 +104,19 @@ async function firebaseStore(onChange) {
   const appMod = await import(`${CDN}/firebase-app.js`);
   const fs = await import(`${CDN}/firebase-firestore.js`);
   const app = appMod.initializeApp(firebaseConfig);
-  const db = fs.getFirestore(app);
+  // Offline persistence: every device keeps a full local copy (IndexedDB).
+  // The app opens instantly with last-synced data even with no internet,
+  // and anything logged offline queues on the phone and syncs when the
+  // connection returns. Multi-tab manager lets the app and the watch page
+  // share the same local copy.
+  let db;
+  try {
+    db = fs.initializeFirestore(app, {
+      localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
+    });
+  } catch {
+    db = fs.getFirestore(app); // very old browser — fall back to online-only
+  }
 
   const {
     collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
