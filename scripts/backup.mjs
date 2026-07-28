@@ -10,7 +10,7 @@
 //    photos\     — every picture as a real .jpg, organized per pup
 //                  plus the family album
 // ============================================================
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
 
@@ -100,6 +100,16 @@ console.log(`  Family album: ${familyPhotos.length} photos`);
 const snapshot = { backedUpAt: now.toISOString(), project: PROJECT, settings, puppies, familyPhotos };
 const json = JSON.stringify(snapshot, null, 2);
 writeFileSync(join(dir, 'data.json'), json);
+
+// ---- retention: keep the newest 30 backups, delete older ones ----
+const KEEP = 30;
+const snapshots = readdirSync(root, { withFileTypes: true })
+  .filter(e => e.isDirectory() && /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}$/.test(e.name))
+  .map(e => e.name).sort();
+for (const old of snapshots.slice(0, Math.max(0, snapshots.length - KEEP))) {
+  rmSync(join(root, old), { recursive: true, force: true });
+  console.log(`  (cleaned up old backup ${old})`);
+}
 
 console.log(`\nDone! ✅
   ${puppies.length} pups · ${weightCount} weigh-ins · ${feedingCount} feedings
